@@ -10,3 +10,6 @@ blender/renders/*.png
 !blender/renders/A_wide_establishing.png
 !blender/renders/B_lowangle_hero_word.png
 !blender/renders/C_closeup_dial.png
+cafe/output/*.mp4
+!cafe/output/*_hf_video.mp4
+cafe/higgsfield/*.png
