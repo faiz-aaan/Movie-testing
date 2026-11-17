@@ -69,8 +69,8 @@ M = dict(
     glass=mat("glass", (0.004, 0.005, 0.009), 0, 0.04),
     shell=mat("shell", (0.05, 0.05, 0.055), 0, 0.5),
     cover=mat("cover", (0.07, 0.07, 0.075), 0.2, 0.55),
-    film=mat("film", (0.9, 0.9, 0.9), 0, 0.7),
-    led=mat("led", (1, 1, 1), 0, 0.3, **{"Emission Color": (1, 0.95, 0.85, 1), "Emission Strength": 12}),
+    film=mat("film", (0.16, 0.16, 0.17), 0, 0.8),
+    led=mat("led", (1, 1, 1), 0, 0.3, **{"Emission Color": (1, 0.95, 0.85, 1), "Emission Strength": 5}),
     speaker=mat("speaker", (0.03, 0.03, 0.035), 0.1, 0.5),
     stand=mat("stand", (0.5, 0.5, 0.52), 1, 0.3),
     floor=mat("floor", (0.02, 0.02, 0.022), 0.2, 0.25),
@@ -143,6 +143,7 @@ for nm, loc, e_, sz, col in (("key", (2.5, -3.0, 4.0), 700, 3.0, (1.0, 0.95, 0.9
                              ("top", (0, 0, 5.0), 300, 4.0, (1, 1, 1))):
     bpy.ops.object.light_add(type="AREA", location=loc)
     l = bpy.context.object; l.name = nm; l.data.energy = e_; l.data.size = sz; l.data.color = col
+    if WHAT == "tv" and nm == "top": l.data.energy = 90          # flat white layers blow out under a strong top light
     l.rotation_euler = (Vector((0, 0, 0)) - l.location).to_track_quat("-Z", "Y").to_euler()
 
 ANCH = {}      # label name -> (object, local offset)

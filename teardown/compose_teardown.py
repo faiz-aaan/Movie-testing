@@ -45,7 +45,10 @@ def read_video(path):
 
 REAL_HP = read_video(os.path.join(B, "real_hp.mp4"))
 REAL_TV = read_video(os.path.join(B, "real_tv.mp4"))
-TRK = {k: json.load(open(os.path.join(HERE, "renders", k, "track.json"))) for k in ("hp", "tv")}
+TRK = {}
+for k_ in ("hp", "tv"):
+    p_ = os.path.join(HERE, "renders", k_, "track.json")
+    if os.path.exists(p_): TRK[k_] = json.load(open(p_))
 
 
 def cgi_frame(which, local_t):
@@ -151,15 +154,15 @@ _cards = {}
 def card(title, sub, width):
     k = (title, sub, width)
     if k in _cards: return _cards[k]
-    ft, fs = font(F_TITLE, 38), font(F_SUB, 27)
+    ft, fs = font(F_TITLE, 38), font(F_SUB, 28)
     lines = wrap(sub, fs, width - 48)
-    h = 22 + 44 + 8 + 34 * len(lines) + 18
+    h = 20 + 44 + 8 + 34 * len(lines) + 16
     im = Image.new("RGBA", (width, h), (0, 0, 0, 0)); d = ImageDraw.Draw(im)
     d.rounded_rectangle([0, 0, width - 1, h - 1], radius=12, fill=(9, 11, 15, 205), outline=(255, 255, 255, 70), width=2)
     d.rectangle([0, 14, 5, h - 14], fill=(*RED, 255))
-    d.text((24, 18), title, font=ft, fill=(246, 246, 246, 255))
+    d.text((24, 16), title, font=ft, fill=(246, 246, 246, 255))
     for j, ln in enumerate(lines):
-        d.text((24, 18 + 44 + 8 + 34 * j), ln, font=fs, fill=(186, 192, 202, 255))
+        d.text((24, 16 + 44 + 8 + 34 * j), ln, font=fs, fill=(196, 202, 212, 255))
     a = np.asarray(im, np.float32) / 255
     _cards[k] = (a[..., :3] * 255, a[..., 3], h)
     return _cards[k]
@@ -204,7 +207,7 @@ TV_LABELS = [
     ("back", 5.9, "BACK COVER", "Holds every board and the wall-mount points."),
 ]
 TV_STEP, TV_OFF = 0.6, 6.7
-HP_SIDE_X = {"L": 36, "R": W - 36 - 372}
+HP_SIDE_X = {"L": 14, "R": W - 14 - 366}
 
 
 def hp_labels(img, lt, t_abs):
@@ -212,11 +215,11 @@ def hp_labels(img, lt, t_abs):
     for key, t_on, side, slot, title, sub in HP_LABELS:
         a = ease_out((lt - t_on) / 0.3) * (1 - ease_io((lt - HP_OFF) / 0.4))
         if a <= 0.01: continue
-        c = card(title, sub, 372)
+        c = card(title, sub, 366)
         x0 = HP_SIDE_X[side]; yc = slot * H
         ax, ay = anchor("hp", key, lt)
         p0 = (ax * W, ay * H)
-        p1 = (x0 + (372 if side == "L" else 0), yc)
+        p1 = (x0 + (366 if side == "L" else 0), yc)
         # slide-in
         img = blit_card(img, c, x0 + int((-1 if side == "L" else 1) * 26 * (1 - ease_out((lt - t_on) / 0.3))), yc, a)
         pend.append((p0, p1, ease_out((lt - t_on - 0.05) / 0.3), a))
@@ -229,8 +232,8 @@ def tv_labels(img, lt):
         t_off = t_on + TV_STEP if k < len(TV_LABELS) - 1 else TV_OFF
         a = ease_out((lt - t_on) / 0.18) * (1 - ease_io((lt - (t_off - 0.14)) / 0.14))
         if a <= 0.01: continue
-        c = card(title, sub, 960)
-        x0 = (W - 960) // 2; yc = 0.9 * H
+        c = card(title, sub, 980)
+        x0 = (W - 980) // 2; yc = 0.9 * H
         ax, ay = anchor("tv", key, lt)
         p0 = (ax * W, ay * H); p1 = (W / 2, yc - c[2] / 2)
         img = blit_card(img, c, x0, yc, a)
@@ -257,14 +260,13 @@ def bg_glow(img, tint=(18, 22, 34), k=1.0):
 # ---------- segments ----------
 def seg_real(frames, lt, i, name_lines, t_title):
     img = grade_real(frames[min(len(frames) - 1, int(lt * FPS))].astype(np.float32))
+    img *= (1 - 0.55 * np.clip(1 - yy / (H * 0.34), 0, 1) ** 1.3)[..., None]     # darken the top so titles read
     # titles
     a = ease_out((lt - t_title) / 0.35)
     m1 = text_mask(name_lines[0], F_TITLE, 54, 9)
     img = put(img, m1, W / 2, H * 0.115, CREAM, a, 1.0, shadow=0.75)
     p = (lt - t_title - 0.5) / 0.25
-    img = put(img, text_mask("TEARDOWN", BEBAS, 330, 10), W / 2, H * 0.19, (255, 255, 255), clamp01(p * 2), 1.35 - 0.35 * ease_out(p), shadow=0.8)
-    if p > 0:
-        cv2.circle(img, (int(W / 2 - 330 * 1.0), int(H * 0.285)), 9, RED, -1, cv2.LINE_AA)
+    img = put(img, text_mask("TEARDOWN", BEBAS, 250, 8), W / 2, H * 0.185, (255, 255, 255), clamp01(p * 2), 1.3 - 0.3 * ease_out(p), shadow=0.8)
     return img
 
 
@@ -322,8 +324,8 @@ def frame(i):
         img = np.zeros((H, W, 3), np.float32) + np.array([8, 9, 13], np.float32)
         img = bg_glow(img, (26, 30, 44), 1.4)
         img = flash(img, lt, 0.5, 0.08)
-        img = put(img, text_mask("TEARDOWN", BEBAS, 360, 12), W / 2, H * 0.42, (255, 255, 255), ease_out(lt / 0.4), 1.2 - 0.2 * ease_out(lt / 0.4))
-        cv2.circle(img, (int(W / 2 - 360), int(H * 0.5)), 10, RED, -1, cv2.LINE_AA)
+        img = put(img, text_mask("TEARDOWN", BEBAS, 260, 10), W / 2, H * 0.42, (255, 255, 255), ease_out(lt / 0.4), 1.2 - 0.2 * ease_out(lt / 0.4))
+        img[int(H * 0.495):int(H * 0.499), int(W / 2 - 60):int(W / 2 + 60)] = RED
         img = put(img, text_mask("NOTHING HEADPHONE (1)", F_TITLE, 52, 7), W / 2, H * 0.56, CREAM, ease_out((lt - 0.3) / 0.4))
         img = put(img, text_mask("+  VU TV", F_TITLE, 52, 7), W / 2, H * 0.60, CREAM, ease_out((lt - 0.45) / 0.4))
         img = put(img, text_mask("Illustrative exploded views", F_SUB, 26, 2), W / 2, H * 0.95, CREAM, 0.5 * ease_out((lt - 0.8) / 0.4))
