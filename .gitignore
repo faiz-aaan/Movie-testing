@@ -1,0 +1,5 @@
+# heavy / regenerable
+demo/models/
+demo/build/*
+!demo/build/esrgan_before_after.jpg
+__pycache__/
