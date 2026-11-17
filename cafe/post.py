@@ -326,7 +326,7 @@ os.makedirs(os.path.join(HERE, "output"), exist_ok=True)
 out = os.path.join(HERE, "output", f"ember_roast_{FILM}{'_preview' if PREVIEW else ''}.mp4")
 audio = os.path.join(HERE, "build", f"score_{FILM}.wav")
 ff = subprocess.Popen(["ffmpeg", "-y", "-v", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{W}x{H}", "-r", str(FPS), "-i", "-",
-                       "-i", audio, "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-pix_fmt", "yuv420p",
+                       "-i", audio, "-c:v", "libx264", "-preset", "medium", "-crf", "23", "-pix_fmt", "yuv420p",
                        "-c:a", "aac", "-b:a", "256k", "-shortest", "-movflags", "+faststart", out], stdin=subprocess.PIPE)
 for i in range(NF):
     ff.stdin.write(frame(i).tobytes())
