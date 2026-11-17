@@ -576,10 +576,10 @@ def s_beans_burst(n):
     shot_camera(n, [(0, (-0.05, 1.75, CT + 0.06)), (1, (-0.1, 1.95, CT + 0.08))], [(0, (-0.25, 2.35, CT + 0.08)), (1, (-0.25, 2.35, CT + 0.1))], [(0, 40), (1, 50)], 2.0, "lin")
     rs = random.Random(3)
     for b in flyers[:70]:
-        v = (rs.gauss(0, 0.6), rs.gauss(-0.9, 0.4), rs.uniform(1.6, 2.8)); spin = [rs.uniform(-12, 12) for _ in range(3)]
-        delay = rs.uniform(0, 3)
+        v = (rs.gauss(0, 0.25), rs.gauss(-0.35, 0.2), rs.uniform(0.7, 1.4)); spin = [rs.uniform(-12, 12) for _ in range(3)]
+        delay = rs.uniform(0, 4)
         for f in range(1, n + 1):
-            t = max(0, (f - 1 - delay)) / 12.0 * 0.55  # slow-motion
+            t = max(0, (f - 1 - delay)) / 12.0 * 0.4  # slow-motion
             z = c[2] + 0.02 + v[2] * t - 4.9 * t * t
             b.location = (c[0] + v[0] * t, c[1] + v[1] * t, max(z, CT + 0.006))
             b.rotation_euler = tuple(s * t for s in spin)
