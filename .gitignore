@@ -22,3 +22,4 @@ plugin_test/*.mp4
 plugin_test/parts/
 plugin_test/mix.wav
 plugin_test/stab.trf
+vox-headphone/styletest/*.png
