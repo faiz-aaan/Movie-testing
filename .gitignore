@@ -17,3 +17,4 @@ client_footage/
 teardown/renders/
 teardown/build/
 teardown/test_*.png
+teardown/output/teardown_nothing_headphone_vu_tv.mp4

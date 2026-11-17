@@ -328,6 +328,10 @@ else:
     logo = box("logo", (0, -TD / 2 + 0.04, 0.04), (0.13, 0.03, 0.005), M["alu"])
     layer("bezel", [*bz, logo], 0.0, 3.85)
 
+    # assembled-state heights so layers don't z-fight before the explosion starts
+    for k_, v_ in dict(back=0.0, boards=0.05, backlight=0.14, films=0.19, panel=0.23, bezel=0.27).items():
+        PARTS[k_]["base"] = v_
+
     ANCH.update({"panel": (PARTS["panel"]["obj"], (TW / 2 - 0.05, 0.0, 0.0)), "backlight": (PARTS["backlight"]["obj"], (TW / 2 - 0.1, -0.4, 0.0)),
                  "boards_main": (PARTS["boards"]["obj"], (-0.65, 0.05, 0.05)), "boards_psu": (PARTS["boards"]["obj"], (1.15, 0.0, 0.05)),
                  "boards_spk": (PARTS["boards"]["obj"], (1.2, -0.68, 0.05)), "back": (PARTS["back"]["obj"], (TW / 2 - 0.2, 0.3, 0.0))})
