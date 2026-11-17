@@ -28,3 +28,6 @@ vox-headphone/clips/*.mp4
 vox-headphone/*.mp4
 bask-cafe/board/*.png
 bask-cafe/refs/
+bask-cafe/clips/
+bask-cafe/build/
+bask-cafe/*.mp4
