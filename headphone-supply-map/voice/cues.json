@@ -1,0 +1,44 @@
+[
+ {
+  "id": "l1",
+  "t0": 0.8,
+  "t1": 4.181,
+  "text": "Headphones look simple. The map behind them is not.",
+  "say": "Headphones look simple. The map behind them is not."
+ },
+ {
+  "id": "l2",
+  "t0": 4.6,
+  "t1": 9.365,
+  "text": "Magnets like the ones in its drivers? More than 9 in 10 are made in China.",
+  "say": "Magnets like the ones in its drivers? More than nine in ten are made in China."
+ },
+ {
+  "id": "l3",
+  "t0": 10.0,
+  "t1": 15.007,
+  "text": "Lithium for the battery is mostly refined in China too: about 7 in 10.",
+  "say": "Lithium for the battery is mostly refined in China too: about seven in ten."
+ },
+ {
+  "id": "l4",
+  "t0": 15.6,
+  "t1": 21.077,
+  "text": "And one Taiwan-based foundry takes about 7 in 10 of the world's contract chip sales.",
+  "say": "And one Taiwan-based foundry takes about seven in ten of the world's contract chip sales."
+ },
+ {
+  "id": "l5",
+  "t0": 22.0,
+  "t1": 25.691,
+  "text": "It all converges on electronics clusters in southern China.",
+  "say": "It all converges on electronics clusters in southern China."
+ },
+ {
+  "id": "l6",
+  "t0": 27.6,
+  "t1": 30.123,
+  "text": "Then it ships to everyone who presses play.",
+  "say": "Then it ships to everyone who presses play."
+ }
+]

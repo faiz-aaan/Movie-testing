@@ -1,0 +1,38 @@
+[
+ {
+  "id": "l1",
+  "text": "Headphones look simple. The map behind them is not.",
+  "voice": "bf_emma",
+  "speed": 0.92
+ },
+ {
+  "id": "l2",
+  "text": "Magnets like the ones in its drivers? More than nine in ten are made in China.",
+  "voice": "bf_emma",
+  "speed": 0.92
+ },
+ {
+  "id": "l3",
+  "text": "Lithium for the battery is mostly refined in China too: about seven in ten.",
+  "voice": "bf_emma",
+  "speed": 0.92
+ },
+ {
+  "id": "l4",
+  "text": "And one Taiwan-based foundry takes about seven in ten of the world's contract chip sales.",
+  "voice": "bf_emma",
+  "speed": 0.92
+ },
+ {
+  "id": "l5",
+  "text": "It all converges on electronics clusters in southern China.",
+  "voice": "bf_emma",
+  "speed": 0.92
+ },
+ {
+  "id": "l6",
+  "text": "Then it ships to everyone who presses play.",
+  "voice": "bf_emma",
+  "speed": 0.92
+ }
+]

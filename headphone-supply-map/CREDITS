@@ -1,0 +1,40 @@
+"Where a Headphone Comes From" (3D Map Explainer) · third-party data, assets and sources
+
+## Map data and imagery (downloaded by build.sh via tools/data.py into raw/ and processed into assets/; not in git)
+- Elevation and bathymetry: AWS Terrain Tiles (Mapzen / Tilezen "terrarium" PNG), https://registry.opendata.aws/terrain-tiles/
+  zoom 10 for the Pearl River Delta, zoom 8 for East China and the South China Sea, zoom 6 for the wide region.
+  Sources include SRTM (public domain), GMTED, ETOPO1 and GEBCO; attribution as required by the terrain-tiles documentation.
+- Imagery: Sentinel-2 cloudless 2016 - https://s2maps.eu by EOX IT Services GmbH (Contains modified Copernicus Sentinel data
+  2016 & 2017), CC BY 4.0. Layer s2cloudless_3857: zoom 11 (delta), zoom 9 (East China), zoom 7 (wide region).
+  Later Sentinel-2 cloudless releases are CC BY-NC-SA and are NOT used (this film is for sale).
+- Land colour for the East China and wide levels: NASA Blue Marble Next Generation (NASA Earth Observatory; Reto Stockli, NASA GSFC),
+  served by NASA GIBS (https://gibs.earthdata.nasa.gov), layer BlueMarble_NextGeneration, level 8. NASA imagery is generally
+  free to use with credit; GIBS asks for acknowledgement of NASA GIBS / ESDIS. **Not yet checked against NASA's current media
+  usage page: confirm before selling.** Credited on screen in the top-right line.
+- The film carries a credit line top-right throughout: elevation AWS Terrain Tiles, imagery Sentinel-2 cloudless 2016 by EOX
+  (CC BY 4.0), NASA Blue Marble, heights x3.2, pillar heights not to scale, no borders drawn.
+- Every download URL and date is logged in raw/manifest.jsonl (kept with the local data).
+
+## Facts
+- Every number on screen and in the narration is in FACTS.md with source and basis. The IEA pages themselves could not be
+  opened (HTTP 403): the 94% and 70% (lithium) figures are verified only through press coverage quoting the IEA, and the 70%
+  (foundry) figure through Focus Taiwan quoting TrendForce. Pillar and lane positions are schematic and labelled as such.
+
+## Voice
+- Kokoro-82M (hexgrad), voice bf_emma, Apache License 2.0; run locally via kokoro-onnx (MIT) through the library's
+  core/tts/tts.py. Speech check: faster-whisper base.en (MIT; OpenAI Whisper weights, MIT). Script: voice/lines.json.
+
+## Music samples (CC0; credit not required, given with thanks)
+- VS Chamber Orchestra: Community Edition (Versilian Studios): contrabass (arco, pizzicato), cellos, violas, violins (pizzicato), horn, timpani.
+- Versilian Community Sample Library (Versilian Studios): hand chimes, glockenspiel, harp, frame drum.
+- FreePats project (freepats.zenvoid.org): hang.
+- The score is original (written for this film in mix.py, A minor, 90 bpm). Ambience, foley and the sine pedal are procedural (core/audio/sfx.py and mix.py).
+
+## Fonts (SIL Open Font License 1.1; downloaded into fonts/, not in git)
+- Barlow Condensed Regular / Medium / SemiBold: The Barlow Project Authors, https://github.com/google/fonts/tree/main/ofl/barlowcondensed
+
+## Code
+- three.js (MIT): loaded from the library's node_modules. post-processing from the library's core/three/post.js.
+
+## Images, models
+- No photographs other than the satellite mosaics above, no 3D models, no AI-generated images. Pillars, lanes, labels and type are drawn in code.

@@ -1,0 +1,375 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<title>Where a Headphone Comes From</title>
+<script type="importmap">{"imports":{"three":"/node_modules/three/build/three.module.js","three/addons/":"/node_modules/three/examples/jsm/"}}</script>
+<style>
+@font-face{font-family:Barlow;src:url(fonts/BarlowCondensed-Regular.ttf);font-weight:400}
+@font-face{font-family:Barlow;src:url(fonts/BarlowCondensed-Medium.ttf);font-weight:500}
+@font-face{font-family:Barlow;src:url(fonts/BarlowCondensed-SemiBold.ttf);font-weight:600}
+html,body{margin:0;background:#05080c;overflow:hidden}
+canvas{position:absolute;left:0;top:0}
+</style></head>
+<body>
+<script type="module">
+// "Where a Headphone Comes From": a 3D Map Explainer in the library's style. One timeline, 34 s, 90 bpm (1 beat = .667 s).
+//   0-4.5 the delta, low, climbing  | 4.5-9.4 magnets (pillar 1) | 10-15 battery metal (pillar 2) | 15.6-21 chips (pillar 3)
+//   21.5-26 arcs converge, dive      | 26-30 the hub, lanes out    | 30-34 pull-out, the three pillars held
+// ?t0=&t1= cuts a range out of the timeline; ?ssaa=2 renders supersampled; ?nosubs=1 hides subtitles.
+import * as THREE from 'three';
+import { makePost } from '/core/three/post.js';
+import { clamp, lerp, seg, ss, eo, eio, ei, track } from '/core/lib.js';
+
+const Wd = innerWidth, Ht = innerHeight, Q = new URLSearchParams(location.search);
+const SSAA = +(Q.get('ssaa') || 1);
+const FULL = 34.0, T0 = +(Q.get('t0') || 0), T1 = Q.has('t1') ? +Q.get('t1') : FULL;
+const D2R = Math.PI / 180, EX = 3.2;
+
+// ---------- data ----------
+const J = u => fetch(u).then(r => r.json()), B = u => fetch(u).then(r => r.arrayBuffer());
+const [dm, mm, wm, draw, mraw, wraw, CUES] = await Promise.all([J('assets/delta_meta.json'), J('assets/mid_meta.json'), J('assets/wide_meta.json'), B('assets/delta_height.bin'), B('assets/mid_height.bin'), B('assets/wide_height.bin'), J('voice/cues.json')]);
+const dbuf = new Float32Array(draw), mbuf = new Float32Array(mraw), wbuf = new Float32Array(wraw);
+
+// one world, in km: Web Mercator at zoom 11, origin on the hub (Shenzhen). Both terrain meshes live in it.
+const HUB = [114.06, 22.54];
+const merc = (lon, lat) => { const n = 2 ** 11 * 256; return [(lon + 180) / 360 * n, (1 - Math.asinh(Math.tan(lat * D2R)) / Math.PI) / 2 * n]; };
+const [HX, HY] = merc(...HUB), S11 = 40075.016 * Math.cos(HUB[1] * D2R) / (2 ** 11 * 256);
+const xz = (lon, lat) => { const [mx, my] = merc(lon, lat); return [(mx - HX) * S11, (my - HY) * S11]; };
+const unxz = (x, z) => { const n = 2 ** 11 * 256, mx = x / S11 + HX, my = z / S11 + HY; return [mx / n * 360 - 180, Math.atan(Math.sinh(Math.PI * (1 - 2 * my / n))) / D2R]; };
+const box = m => { const [l, t] = xz(m.bbox[0], m.bbox[3]), [r, b] = xz(m.bbox[2], m.bbox[1]); return { l, t, r, b }; };
+const DB = box(dm), MB = box(mm), WB = box(wm);
+
+function bil(buf, w, h, gx, gz) {
+  const x0 = Math.max(0, Math.min(w - 2, Math.floor(gx))), z0 = Math.max(0, Math.min(h - 2, Math.floor(gz)));
+  const fx = clamp(gx - x0), fz = clamp(gz - z0);
+  const a = buf[z0 * w + x0], b = buf[z0 * w + x0 + 1], c = buf[(z0 + 1) * w + x0], d = buf[(z0 + 1) * w + x0 + 1];
+  return (a * (1 - fx) + b * fx) * (1 - fz) + (c * (1 - fx) + d * fx) * fz;
+}
+function hAt(X, Z) {
+  if (X > DB.l && X < DB.r && Z > DB.t && Z < DB.b) return bil(dbuf, dm.GW, dm.GH, (X - DB.l) / (DB.r - DB.l) * (dm.GW - 1), (Z - DB.t) / (DB.b - DB.t) * (dm.GH - 1));
+  if (X > MB.l && X < MB.r && Z > MB.t && Z < MB.b) return bil(mbuf, mm.GW, mm.GH, (X - MB.l) / (MB.r - MB.l) * (mm.GW - 1), (Z - MB.t) / (MB.b - MB.t) * (mm.GH - 1));
+  return bil(wbuf, wm.GW, wm.GH, (X - WB.l) / (WB.r - WB.l) * (wm.GW - 1), (Z - WB.t) / (WB.b - WB.t) * (wm.GH - 1));
+}
+const yOf = h => Math.max(h, 0) / 1000 * EX;
+const geo = (lon, lat, lift = 0) => { const [X, Z] = xz(lon, lat); return new THREE.Vector3(X, yOf(hAt(X, Z)) + lift, Z); };
+const sea = (lon, lat, y = .06) => { const [X, Z] = xz(lon, lat); return new THREE.Vector3(X, y, Z); };
+
+// ---------- renderer and scene ----------
+const renderer = new THREE.WebGLRenderer({ antialias: false, preserveDrawingBuffer: true });
+renderer.setPixelRatio(SSAA); renderer.setSize(Wd, Ht);
+renderer.domElement.style.width = Wd + 'px'; renderer.domElement.style.height = Ht + 'px';
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.55;
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+const HAZE = new THREE.Color(0x6a7480);
+scene.background = HAZE.clone(); scene.fog = new THREE.Fog(HAZE, 300, 900);
+
+const tl = new THREE.TextureLoader();
+const load = u => new Promise((r, e) => tl.load(u, r, undefined, e));
+const [dAlb, dWat, dSh, mAlb, mWat, mSh, wAlb, wWat, wSh] = await Promise.all(['delta_albedo.jpg', 'delta_water.png', 'delta_shadow.png', 'mid_albedo.jpg', 'mid_water.png', 'mid_shadow.png', 'wide_albedo.jpg', 'wide_water.png', 'wide_shadow.png'].map(f => load('assets/' + f)));
+for (const t of [dAlb, mAlb, wAlb]) { t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 16; }
+for (const t of [dSh, mSh, wSh]) t.anisotropy = 8;
+
+function roughFrom(tex) {
+  const c = document.createElement('canvas'); c.width = tex.image.width; c.height = tex.image.height;
+  const g = c.getContext('2d'); g.drawImage(tex.image, 0, 0); const id = g.getImageData(0, 0, c.width, c.height);
+  for (let i = 0; i < id.data.length; i += 4) { const w = id.data[i] / 255; id.data[i] = id.data[i + 1] = id.data[i + 2] = 245 * (1 - w) + 185 * w; }
+  g.putImageData(id, 0, 0); return new THREE.CanvasTexture(c);
+}
+// baked low-sun shadows multiply the direct light only (no shadow maps: nothing shimmers while the camera flies)
+const LIGHT_CHUNK = THREE.ShaderChunk.lights_fragment_begin.replaceAll('RE_Direct( directLight,', 'directLight.color *= mix( 1.0, texture2D( tShadow, vMapUv ).r, 0.88 );\n\t\tRE_Direct( directLight,');
+function terrainMat(map, water, shadow, clipRect, edgeRect) {
+  const m = new THREE.MeshStandardMaterial({ map, roughnessMap: roughFrom(water), roughness: 1, metalness: 0 });
+  m.onBeforeCompile = sh => {
+    Object.assign(sh.uniforms, { tShadow: { value: shadow }, clipR: { value: clipRect || new THREE.Vector4(1, 1, -1, -1) }, edgeR: { value: edgeRect || new THREE.Vector4(-1e6, -1e6, 1e6, 1e6) } });
+    sh.vertexShader = 'varying vec3 vWp;\n' + sh.vertexShader.replace('#include <project_vertex>', '#include <project_vertex>\n vWp = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+    sh.fragmentShader = 'uniform sampler2D tShadow; uniform vec4 clipR, edgeR; varying vec3 vWp;\n' + sh.fragmentShader
+      .replace('#include <map_fragment>', '#include <map_fragment>\n float ed = min(min(vWp.x - edgeR.x, edgeR.z - vWp.x), min(vWp.z - edgeR.y, edgeR.w - vWp.z));\n diffuseColor.rgb = mix(vec3(.003, .010, .017), diffuseColor.rgb, smoothstep(0., 520., ed));')
+      .replace('void main() {', 'void main() {\n if (vWp.x > clipR.x && vWp.x < clipR.z && vWp.z > clipR.y && vWp.z < clipR.w) discard;')
+      .replace('#include <lights_fragment_begin>', LIGHT_CHUNK);
+  };
+  return m;
+}
+function terrainMesh(b, gw, gh, buf, mat) {
+  const g = new THREE.PlaneGeometry(b.r - b.l, b.b - b.t, gw - 1, gh - 1); g.rotateX(-Math.PI / 2);
+  const p = g.attributes.position; for (let i = 0; i < p.count; i++) p.setY(i, yOf(buf[i]));
+  g.computeVertexNormals(); const m = new THREE.Mesh(g, mat); m.position.set((b.l + b.r) / 2, 0, (b.t + b.b) / 2); return m;
+}
+scene.add(terrainMesh(DB, dm.GW, dm.GH, dbuf, terrainMat(dAlb, dWat, dSh)));
+{
+  const inset = 1.5, clipD = new THREE.Vector4(DB.l + inset, DB.t + inset, DB.r - inset, DB.b - inset);
+  const mid = terrainMesh(MB, mm.GW, mm.GH, mbuf, terrainMat(mAlb, mWat, mSh, clipD)); mid.position.y = -.03; scene.add(mid);
+  const clipM = new THREE.Vector4(MB.l + 6, MB.t + 6, MB.r - 6, MB.b - 6);
+  const w = terrainMesh(WB, wm.GW, wm.GH, wbuf, terrainMat(wAlb, wWat, wSh, clipM, new THREE.Vector4(WB.l, WB.t, WB.r, WB.b))); w.position.y = -.07; scene.add(w);
+}
+const sun = new THREE.DirectionalLight(0xffe2b8, 3.1);
+sun.position.set(-150, 62, -70); sun.target.position.set(0, 0, 0);
+scene.add(sun, sun.target, new THREE.HemisphereLight(0xa9c0d2, 0x5a4026, 0.85));
+
+// ---------- glowing ribbons (screen-space minimum width; additive, so only they bloom) ----------
+const camera = new THREE.PerspectiveCamera(28, Wd / Ht, 2, 9000);
+const PIXK = 2 * Math.tan(THREE.MathUtils.degToRad(14)) / Ht;
+const RIB_V = `attribute float aSide; attribute vec3 aNorm; attribute float aAlong;
+  uniform float wW, pxW, pixK; varying float vSide, vAlong;
+  void main(){ vec4 wp = modelMatrix * vec4(position, 1.); float pw = length(cameraPosition - wp.xyz) * pixK;
+    float hw = max(wW * .5, pxW * .5 * pw); wp.xyz += aNorm * aSide * hw; vSide = aSide; vAlong = aAlong;
+    gl_Position = projectionMatrix * viewMatrix * wp; }`;
+const RIB_F = `varying float vSide, vAlong; uniform vec3 col; uniform float k, inten, revA, revB, soft, head, headAmt, flowSp, flowLen, flowAmt, flowPh, base, L, endFade;
+  void main(){
+    float d = vSide; float g = exp(-d * d * k);
+    float vis = smoothstep(revA - soft, revA, vAlong) * (1. - smoothstep(revB, revB + soft, vAlong));
+    if (vis <= 0.) discard;
+    float e = smoothstep(0., endFade, vAlong) * smoothstep(L, L - endFade, vAlong);
+    float a = base;
+    if (flowAmt > 0.) { float f = fract((vAlong - flowPh) / flowSp); a += flowAmt * smoothstep(1. - flowLen / flowSp, 1., f) * smoothstep(1., .985, f); }
+    a += headAmt * exp(-pow((vAlong - head) / (2.5 * max(1., soft / 2.)), 2.));
+    gl_FragColor = vec4(col * g * a * inten * vis * e, 1.); }`;
+function ribbon(pts, o) {
+  const pos = [], side = [], nrm = [], al = [], idx = []; let L = 0;
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[Math.max(0, i - 1)], b = pts[Math.min(pts.length - 1, i + 1)];
+    const n = new THREE.Vector3().crossVectors(new THREE.Vector3().subVectors(b, a), new THREE.Vector3(0, 1, 0)).normalize();
+    if (i) L += pts[i].distanceTo(pts[i - 1]);
+    for (const s of [1, -1]) { pos.push(pts[i].x, pts[i].y, pts[i].z); side.push(s); nrm.push(n.x, n.y, n.z); al.push(L); }
+    if (i) { const q = 2 * i; idx.push(q - 2, q - 1, q, q - 1, q + 1, q); }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('aSide', new THREE.Float32BufferAttribute(side, 1));
+  g.setAttribute('aNorm', new THREE.Float32BufferAttribute(nrm, 3)); g.setAttribute('aAlong', new THREE.Float32BufferAttribute(al, 1)); g.setIndex(idx);
+  const U = { col: new THREE.Color(o.col ?? 0xffa63d), k: o.k ?? 3, inten: 0, wW: o.wW ?? 0, pxW: o.pxW ?? 2, pixK: PIXK, revA: 0, revB: 1e9, soft: o.soft ?? 2,
+    head: -1e6, headAmt: 0, flowSp: o.flowSp ?? 30, flowLen: o.flowLen ?? 6, flowAmt: o.flowAmt ?? 0, flowPh: 0, base: o.base ?? 1, L, endFade: o.endFade ?? .01 };
+  const uniforms = {}; for (const k in U) uniforms[k] = { value: U[k] };
+  const m = new THREE.Mesh(g, new THREE.ShaderMaterial({ uniforms, vertexShader: RIB_V, fragmentShader: RIB_F, side: THREE.DoubleSide, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false }));
+  m.renderOrder = 2; m.frustumCulled = false; scene.add(m); m.L = L; m.u = uniforms; return m;
+}
+const rv = (r, a) => { for (const k in a) r.u[k].value = a[k]; };
+const smooth = (pts, n) => new THREE.CatmullRomCurve3(pts, false, 'centripetal').getSpacedPoints(n);
+const AMB = 0xffa63d, AMB2 = 0xffc36b;
+
+// ---------- the sites (all positions schematic, except the hub and Hsinchu) ----------
+const SITES = {
+  mag: { ll: [115.5, 36.6], n: 9.4, t0: 5.2, t1: 8.4, num: '94%', l1: 'OF THE WORLD’S SINTERED MAGNETS', l2: 'MADE IN CHINA', src: 'IEA · 2024 · POSITION SCHEMATIC', lab: [119.9, 35.0] },
+  li:  { ll: [117.2, 31.8], n: 7.0, t0: 10.8, t1: 13.4, num: '70%', l1: 'OF LITHIUM REFINING', l2: 'DONE IN CHINA', src: 'IEA · AS REPORTED BY ARGUS · POSITION SCHEMATIC', lab: [122.7, 31.3] },
+  chip:{ ll: [120.97, 24.8], n: 7.0, t0: 16.4, t1: 19.0, num: '70%', l1: 'OF CONTRACT CHIP SALES', l2: 'ONE TAIWAN-BASED FOUNDRY', src: 'TRENDFORCE · 2025 · HSINCHU', lab: [124.7, 25.6] },
+};
+function pillar(P, n, R, SH) {
+  const grp = new THREE.Group(); grp.position.copy(P); scene.add(grp);
+  const slabG = new THREE.CylinderGeometry(R, R, SH * .87, 48, 1);
+  const mat = new THREE.MeshStandardMaterial({ color: 0xffb04a, emissive: 0xff9a2e, emissiveIntensity: .38, roughness: .45, metalness: .1 });
+  const ringG = new THREE.TorusGeometry(R, R * .022, 6, 64); ringG.rotateX(Math.PI / 2);
+  const edgeM = new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffb04a).multiplyScalar(2.2), toneMapped: false });
+  const slabs = [];
+  for (let k = 0; k < Math.ceil(n); k++) {
+    const s = new THREE.Group(); s.add(new THREE.Mesh(slabG, mat)); const r = new THREE.Mesh(ringG, edgeM); r.position.y = SH * .435; s.add(r);
+    s.position.y = k * SH + SH / 2; grp.add(s); slabs.push(s);
+  }
+  // the full column (10 = all of it) as a faint ghost, so the lit part reads as a share
+  const ghostM = new THREE.MeshBasicMaterial({ color: 0xcfe0ee, transparent: true, opacity: .0, toneMapped: false, depthWrite: false });
+  const ghost = []; for (let k = 0; k < 10; k++) { const r = new THREE.Mesh(ringG, ghostM.clone()); r.position.y = k * SH + SH * .935; grp.add(r); ghost.push(r); }
+  return { grp, slabs, ghost, P, SH, R, n };
+}
+const PR = 34, PSH = 24;
+for (const k of ['mag', 'li', 'chip']) { const s = SITES[k]; s.P = geo(...s.ll, 0); s.p = pillar(s.P, s.n, PR, PSH); s.p.grp.visible = false; }
+function growPillar(p, k) {
+  const v = p.n * k;
+  p.slabs.forEach((s, i) => { const f = clamp(v - i); const part = i + 1 > p.n ? p.n - i : 1; s.visible = f > 0; s.scale.set(1, Math.max(.001, f * part), 1); s.position.y = i * p.SH + p.SH * f * part / 2; });
+}
+
+// ---------- arcs: each site to the hub (schematic), and the two lanes out to buyers ----------
+const HUBP = geo(...HUB, 1.2);
+function arcPts(A, Bp, hfrac) {
+  const len = A.distanceTo(Bp), pts = [];
+  for (let i = 0; i <= 24; i++) { const u = i / 24, p = A.clone().lerp(Bp, u); p.y = lerp(A.y, Bp.y, u) + Math.sin(Math.PI * u) * len * hfrac + 6; pts.push(p); }
+  return smooth(pts, 220);
+}
+for (const k of ['mag', 'li', 'chip']) {
+  const s = SITES[k], top = s.P.clone(); top.y += PSH * 10 * 0.0 + 12;
+  s.pts = arcPts(top, HUBP, .16);
+  s.glow = ribbon(s.pts, { pxW: 10, k: 3, base: .22, col: AMB });
+  s.core = ribbon(s.pts, { pxW: 2.3, k: 1.2, base: 1, flowAmt: 2.0, flowSp: 150, flowLen: 40, col: AMB2 });
+}
+const LANES = [
+  { pts: smooth([[114.4, 22.4], [116.6, 21.3], [119.5, 20.5], [122.6, 21.0], [125.6, 23.6], [128.0, 27.5]].map(([a, b]) => sea(a, b, .5)), 220), t: 27.7, lab: [128.7, 28.6], text: 'TO NORTH AMERICA' },
+  { pts: smooth([[114.2, 22.3], [113.1, 19.6], [111.4, 16.9], [109.6, 14.4]].map(([a, b]) => sea(a, b, .5)), 160), t: 27.95, lab: [110.7, 15.6], text: 'TO EUROPE' },
+];
+for (const L of LANES) {
+  L.glow = ribbon(L.pts, { pxW: 11, k: 3, base: .22, col: AMB });
+  L.core = ribbon(L.pts, { pxW: 2.4, k: 1.2, base: 1, flowAmt: 2.0, flowSp: 130, flowLen: 36, col: AMB2 });
+}
+
+// ---------- camera: log distance (km), pitch, yaw, target lon/lat, target height ----------
+const CAM = track([
+  [0.0,  [Math.log(52),  8, -108, 113.96, 22.48, 0]],
+  [2.2,  [Math.log(110), 15, -72, 114.0, 22.6, 0]],
+  [4.4,  [Math.log(430), 33, -26, 114.2, 23.3, 0]],
+  [6.4,  [Math.log(1600), 50, -6, 116.6, 33.4, 0]],
+  [9.0,  [Math.log(2300), 56, 0, 117.6, 33.6, 0]],
+  [12.4, [Math.log(2350), 57, 0, 118.2, 31.4, 0]],
+  [15.2, [Math.log(2250), 56, -3, 119.2, 29.4, 0]],
+  [18.2, [Math.log(1900), 52, -6, 121.2, 27.0, 0]],
+  [21.4, [Math.log(2400), 57, -2, 119.2, 29.8, 0]],
+  [24.0, [Math.log(1000), 49, 5, 114.5, 24.6, 0]],
+  [26.2, [Math.log(300), 36, 12, 114.1, 22.8, 0]],
+  [28.2, [Math.log(210), 30, 16, 114.15, 22.55, 0]],
+  [29.8, [Math.log(330), 34, 14, 114.4, 22.9, 0]],
+  [31.6, [Math.log(3700), 62, 2, 118.2, 29.2, 0]],
+  [34.0, [Math.log(4100), 64, 0, 118.4, 29.2, 0]]]);
+function mapCam(t) {
+  const [ld, pd, yd, lo, la, h] = CAM(clamp(t, 0, FULL)); const [X, Z] = xz(lo, la), d = Math.exp(ld), p = pd * D2R, y = yd * D2R;
+  return { d, cam: new THREE.Vector3(X + Math.sin(y) * Math.cos(p) * d, h + Math.sin(p) * d, Z + Math.cos(y) * Math.cos(p) * d), tgt: new THREE.Vector3(X, h, Z) };
+}
+const HZ_LIGHT = new THREE.Color(0x6a7480), HZ_DEEP = new THREE.Color(0x07121b), HZC = new THREE.Color();
+function setCamera(t) {
+  const { d, cam, tgt } = mapCam(t);
+  HZC.copy(HZ_LIGHT).lerp(HZ_DEEP, ss(seg(CAM(clamp(t, 0, FULL))[1], 18, 46))); scene.background.copy(HZC); scene.fog.color.copy(HZC);
+  camera.position.copy(cam); camera.near = Math.max(.2, d * .06); camera.far = d * 6 + 400; camera.lookAt(tgt); camera.updateProjectionMatrix(); camera.updateMatrixWorld();
+  scene.fog.near = d * 1.05; scene.fog.far = d * 3.4 + 60;
+  return d;
+}
+
+// ---------- post ----------
+const post = makePost(renderer, scene, camera, Wd, Ht, { ssaa: SSAA, ao: false });
+post.dof.maxCoc = 8; post.bloom.strength = .55; post.bloom.radius = .55; post.bloom.threshold = .95;
+const VU = post.vig.uniforms; VU.amt.value = .42; VU.warm.value = .25; VU.sat.value = .92; VU.contrast.value = .12;
+
+// ---------- overlay (all type and measurements; positioned through one world -> screen function) ----------
+const ov = document.createElement('canvas'); ov.width = Wd * 2; ov.height = Ht * 2; ov.style.width = Wd + 'px'; ov.style.height = Ht + 'px'; document.body.appendChild(ov);
+const g = ov.getContext('2d');
+await Promise.all(['400 20px Barlow', '500 20px Barlow', '600 20px Barlow'].map(f => document.fonts.load(f, 'ABC')));
+const scr = v => { const p = v.clone().project(camera); return [(p.x + 1) / 2 * Wd, (1 - p.y) / 2 * Ht, p.z]; };
+const C = { land: '#2b2119', sea: '#bcdbe6', light: '#f6eee0', amber: '#ffc36b', ice: '#d9e6ee', dim: 'rgba(240,232,216,.66)' };
+let TX = [];
+const U = Ht / 1080;                              // type scale: sizes are written for 1080 p
+function tw(s, size, w = 500, sp = 0) { g.save(); g.font = `${w} ${size}px Barlow`; g.letterSpacing = sp + 'px'; const r = g.measureText(s).width; g.restore(); return r; }
+function txt(s, x, y, o = {}) {
+  const size = (o.size || 22) * U, a = o.a ?? 1; if (a <= .01) return 0;
+  g.save(); g.font = `${o.w || 500} ${size}px Barlow`; g.letterSpacing = (o.sp || 0) * U + 'px'; g.fillStyle = o.col || C.light; g.globalAlpha = a;
+  const w = g.measureText(s).width; const x0 = o.al === 'c' ? x - w / 2 : o.al === 'r' ? x - w : x;
+  g.fillText(s, x0, y); g.restore();
+  TX.push({ id: o.id || s, text: s, x0: x0, y0: y - size, x1: x0 + w, y1: y + size * .25, pass: !!o.pass });
+  return w;
+}
+function line(pts, col, w = 1.4, a = 1) { g.save(); g.globalAlpha = a; g.strokeStyle = col; g.lineWidth = w * U; g.beginPath(); pts.forEach(([x, y], i) => i ? g.lineTo(x, y) : g.moveTo(x, y)); g.stroke(); g.restore(); }
+function dot(x, y, r, col, a = 1) { g.save(); g.globalAlpha = a; g.fillStyle = col; g.beginPath(); g.arc(x, y, r * U, 0, 7); g.fill(); g.restore(); }
+const farK = d => ss(seg(d, 500, 1300));          // far labels (seas) fade in as the camera climbs, near labels fade out
+
+function seaNames(t, d) {
+  const a = farK(d) * ss(seg(t, 5.5, 6.5)) * (1 - ss(seg(t, 25.4, 26.2))) + farK(d) * ss(seg(t, 30.6, 31.8));
+  for (const [s, ll] of [['EAST CHINA SEA', [125.6, 29.6]], ['SOUTH CHINA SEA', [113.2, 17.0]], ['YELLOW SEA', [123.4, 37.2]], ['PACIFIC OCEAN', [128.0, 21.0]]]) {
+    const [x, y, z] = scr(sea(...ll, 0)); if (z > 1 || x < 0 || x > Wd) continue; txt(s, x, y, { size: 24, sp: 7, col: C.sea, a: .78 * Math.min(1, a) , al: 'c', pass: true });
+  }
+}
+function hubLabel(t, d) {
+  const [x, y, z] = scr(HUBP); if (z > 1) return;
+  const near = 1 - ss(seg(d, 700, 1300)), open = ss(seg(t, .8, 1.6)) * (1 - ss(seg(t, 4.2, 5.0)));
+  // opening: ring pulse, leader out to the title set in empty sky
+  if (open > 0) {
+    const r = 10 + 38 * ((t * .9) % 1); g.save(); g.globalAlpha = .5 * open * (1 - ((t * .9) % 1)); g.strokeStyle = '#ffc36b'; g.lineWidth = 1.6 * U; g.beginPath(); g.arc(x, y, r * U, 0, 7); g.stroke(); g.restore();
+    dot(x, y, 4.2, '#ffc36b', open);
+    const lx = x - 40 * U, ly = y - 150 * U; line([[x, y - 8 * U], [lx, ly + 10 * U]], 'rgba(246,238,224,.75)', 1.3, open * ss(seg(t, 1.0, 1.7)));
+    const k = ss(seg(t, 1.3, 2.2)); txt('WHERE A HEADPHONE', lx, ly - 52 * U, { size: 50, w: 600, sp: 10, col: C.light, a: k * open });
+    txt('COMES FROM', lx, ly, { size: 50, w: 600, sp: 10, col: C.light, a: k * open });
+    txt('A TYPICAL SUPPLY CHAIN · ROUTES AND POSITIONS SCHEMATIC', lx, ly + 38 * U, { size: 20, sp: 5, col: C.sea, a: .85 * k * open });
+  }
+  // hub name, once it matters
+  const on = ss(seg(t, 21.8, 22.6)) * (1 - ss(seg(t, 25.0, 25.8))) + ss(seg(t, 26.0, 26.7)) * (1 - ss(seg(t, 30.6, 31.4)));
+  if (on > 0) { dot(x, y, 5, '#ffc36b', on); txt('SHENZHEN', x + 18 * U, y + 7 * U, { size: 30, w: 600, sp: 7, col: C.sea, a: on * near }); }
+  if (on > 0 && t > 26.2 && t < 30.6) txt('ELECTRONICS CLUSTERS', x + 18 * U, y + 38 * U, { size: 20, sp: 5, col: C.sea, a: .85 * ss(seg(t, 26.6, 27.4)) * (1 - ss(seg(t, 30.0, 30.6))) });
+  // final: the hub as a lit point among the three pillars
+  const fin = ss(seg(t, 31.8, 32.6)); if (fin > 0) dot(x, y, 4.4, '#ffc36b', fin);
+}
+function pillarLabels(t, d) {
+  for (const k of ['mag', 'li', 'chip']) {
+    const s = SITES[k]; const a = ss(seg(t, s.t0 - .3, s.t0 + .6));
+    // each label shows while its line is spoken, and stays (smaller) through the last shot
+    const stay = ss(seg(t, 30.9, 31.8)), main = a * (1 - ss(seg(t, s.t1 + 3.2, s.t1 + 4.2)));
+    const alpha = Math.max(main, stay * a);
+    if (alpha <= 0) continue;
+    const top = s.P.clone(); top.y += PSH * (s.n * Math.min(1, eo(seg(t, s.t0, s.t1)))) + 4;
+    const [px, py, pz] = scr(top), [lx, ly] = scr(sea(...s.lab, 0));
+    if (pz > 1) continue;
+    const big = 1 - .38 * stay;
+    line([[px, py], [lx - 12 * U, ly]], 'rgba(246,238,224,.7)', 1.3, alpha * .9);
+    txt(s.num, lx, ly + 16 * U * big, { size: 80 * big, w: 600, col: C.light, a: alpha * ss(seg(t, s.t0 + .2, s.t0 + 1.0)), id: k + '-n' });
+    const k2 = alpha * ss(seg(t, s.t0 + .5, s.t0 + 1.3));
+    txt(s.l1, lx + 2 * U, ly + (16 + 32) * U * big, { size: 23 * big, w: 600, sp: 3.5, col: C.light, a: k2, id: k + '-1' });
+    txt(s.l2, lx + 2 * U, ly + (16 + 32 + 25) * U * big, { size: 23 * big, w: 600, sp: 3.5, col: C.amber, a: k2, id: k + '-2' });
+    txt(s.src, lx + 2 * U, ly + (16 + 32 + 25 + 23) * U * big, { size: 14 * big, sp: 2.5, col: C.sea, a: .85 * k2, id: k + '-s' });
+  }
+}
+function laneLabels(t) {
+  for (const L of LANES) {
+    const a = ss(seg(t, L.t + 1.5, L.t + 2.3)) ; if (a <= 0) continue;
+    const [x, y, z] = scr(sea(...L.lab, 0)); if (z > 1) continue;
+    txt(L.text, x, y, { size: 24, w: 600, sp: 5, col: C.amber, a: a * .95, al: 'c' });
+    txt('SCHEMATIC', x, y + 24 * U, { size: 15, sp: 4, col: C.sea, a: a * .8, al: 'c', pass: true });
+  }
+}
+function subtitles(t) {
+  const c = CUES.find(c => t >= c.t0 && t < c.t1); if (!c) return;
+  const a = ss(seg(t, c.t0, c.t0 + .3)) * (1 - ss(seg(t, c.t1 - .3, c.t1)));
+  const size = 38 * U, w = tw(c.text, size, 500, 1), x0 = 64 * U, y0 = Ht - 78 * U;
+  const gr = g.createLinearGradient(0, Ht - 220 * U, 0, Ht); gr.addColorStop(0, 'rgba(5,8,12,0)'); gr.addColorStop(1, `rgba(5,8,12,${.62 * a})`);
+  g.save(); g.fillStyle = gr; g.fillRect(0, Ht - 220 * U, Wd, 220 * U); g.restore();
+  g.save(); g.globalAlpha = a; g.fillStyle = '#ffc36b'; g.fillRect(x0 - 22 * U, y0 - size * .95, 3 * U, size * 1.25); g.restore();
+  txt(c.text, x0, y0, { size: 38, w: 500, sp: 1, col: C.light, a, id: c.id });
+}
+function credits(t) {
+  const a = ss(seg(t, 0.5, 1.5)) * .72;
+  txt('ELEVATION: AWS TERRAIN TILES · IMAGERY: SENTINEL-2 CLOUDLESS 2016 BY EOX (CC BY 4.0), NASA BLUE MARBLE · HEIGHTS ×3.2 · PILLAR HEIGHTS NOT TO SCALE · NO BORDERS DRAWN', Wd - 28 * U, 30 * U, { size: 15, sp: 2, col: C.ice, a, al: 'r', pass: true });
+}
+
+// ---------- the frame at film time t ----------
+const EVF = [];
+function frame(t) {
+  TX = [];
+  const d = setCamera(t);
+  // pillars
+  for (const k of ['mag', 'li', 'chip']) {
+    const s = SITES[k], kk = eio(seg(t, s.t0, s.t1)); s.p.grp.visible = t >= s.t0 - .05; growPillar(s.p, kk);
+    s.p.ghost.forEach((r, i) => { r.material.opacity = .0 + .5 * ss(seg(t, s.t0 - .1, s.t0 + .8)) * (i < 10 ? 1 : 0); });
+    s.p.mat = s.p.mat;
+    // pillars are scaled up with distance so they stay legible when the camera is far
+    s.p.grp.scale.setScalar(1);
+  }
+  // arcs 22.0 / 22.35 / 22.7: each one draws from its pillar to the hub with a bright head
+  ['mag', 'li', 'chip'].forEach((k, i) => {
+    const s = SITES[k], t0 = 22.0 + i * .35, kv = eo(seg(t, t0, t0 + 1.9)), hold = 1 - .35 * ss(seg(t, 26, 28)), fade = 1 - ss(seg(t, 31.0, 32.0)) * .55;
+    for (const r of [s.glow, s.core]) rv(r, { revB: kv * r.L, inten: (t >= t0 ? 1 : 0) * hold * fade, head: kv * r.L, headAmt: r === s.core ? 1.5 * (1 - ss(seg(kv, .85, 1))) : 0, soft: 24, flowPh: t * 44 });
+  });
+  // lanes out 27.7 / 27.95
+  for (const L of LANES) {
+    const kv = eio(seg(t, L.t, L.t + 2.2)), fade = 1 - ss(seg(t, 31.2, 32.4)) * .5;
+    for (const r of [L.glow, L.core]) rv(r, { revB: kv * r.L, inten: (t >= L.t ? 1 : 0) * fade, head: kv * r.L, headAmt: r === L.core ? 1.5 * (1 - ss(seg(kv, .85, 1))) : 0, soft: 24, flowPh: t * 40 });
+  }
+  // depth of field only where it earns its cost: the low shots
+  const low = t < 3.6 || (t > 25.4 && t < 30.2);
+  post.dof.maxCoc = low ? 7 : 0; post.dof.focus = d; post.dof.aper = d * (t < 3.6 ? lerp(11, 2, ss(seg(t, 0, 3.6))) : 6);
+  post.bloom.strength = .55 * (t > 25.4 && t < 28 ? lerp(.7, 1, ss(seg(d, 150, 300))) : 1);
+  VU.fade.value = ss(seg(t, 0, .8)) * (1 - ss(seg(t, FULL - .9, FULL)));
+  post.composer.render();
+  // overlay
+  g.setTransform(2, 0, 0, 2, 0, 0); g.clearRect(0, 0, Wd, Ht);
+  { const a = ss(seg(t, 1.0, 1.8)) * (1 - ss(seg(t, 4.2, 5.2))) * .5; if (a > 0) { const gr = g.createLinearGradient(0, 0, 0, Ht * .55); gr.addColorStop(0, `rgba(5,8,12,${a})`); gr.addColorStop(1, 'rgba(5,8,12,0)'); g.fillStyle = gr; g.fillRect(0, 0, Wd, Ht * .55); } }
+  seaNames(t, d); hubLabel(t, d); pillarLabels(t, d); laneLabels(t);
+  // closing line, in the sky over the held shot
+  const fin = ss(seg(t, 31.6, 32.6)) * (1 - ss(seg(t, FULL - .9, FULL)));
+  if (fin > 0) txt('A TYPICAL HEADPHONE, NOT ONE BRAND', 64 * U, 96 * U, { size: 30, w: 600, sp: 7, col: C.light, a: fin });
+  if (fin > 0) txt('FIGURES ARE SHARES OF GLOBAL TOTALS · SOURCES: IEA · TRENDFORCE', 64 * U, 126 * U, { size: 17, sp: 4, col: C.sea, a: .85 * fin });
+  if (!Q.has('nosubs')) subtitles(t);
+  credits(t);
+}
+
+window.DUR = T1 - T0;
+window.render = t => frame(t + T0);
+window.TEXTS = t => { window.render(t); return TX.map(o => ({ ...o })); };
+// cue events for the mixer (film timeline)
+EVF.push({ t: 0, type: 'air' }, { t: .8, type: 'pin' }, { t: 4.4, type: 'rise' });
+for (const k of ['mag', 'li', 'chip']) { const s = SITES[k]; const m = Math.ceil(s.n); for (let i = 0; i < m; i++) EVF.push({ t: s.t0 + (s.t1 - s.t0) * eioInv((i + 1) / s.n > 1 ? 1 : (i + 1) / s.n) , type: 'slab', i, pillar: k }); EVF.push({ t: s.t0 - .1, type: 'pillar', pillar: k }); }
+EVF.push({ t: 22.0, type: 'ignite', i: 0 }, { t: 22.35, type: 'ignite', i: 1 }, { t: 22.7, type: 'ignite', i: 2 }, { t: 24.0, type: 'dive' }, { t: 26.2, type: 'hub' },
+  { t: 27.7, type: 'lane', i: 0 }, { t: 27.95, type: 'lane', i: 1 }, { t: 30.6, type: 'pull' }, { t: 31.8, type: 'final' }, { t: 33.0, type: 'close' });
+function eioInv(y) { let lo = 0, hi = 1; for (let i = 0; i < 30; i++) { const m = (lo + hi) / 2; if (eio(m) < y) lo = m; else hi = m; } return lo; }
+window.EV = EVF.map(e => ({ ...e, t: e.t - T0 })).filter(e => e.t >= 0 && e.t <= T1 - T0);
+window.render(0);
+window.READY = true;
+</script>
+</body></html>
