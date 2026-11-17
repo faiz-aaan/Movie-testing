@@ -24,3 +24,5 @@ plugin_test/mix.wav
 plugin_test/stab.trf
 vox-headphone/styletest/*.png
 vox-headphone/posters/*.png
+vox-headphone/clips/*.mp4
+vox-headphone/*.mp4
