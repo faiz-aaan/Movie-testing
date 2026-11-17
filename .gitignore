@@ -3,3 +3,10 @@ demo/models/
 demo/build/*
 !demo/build/esrgan_before_after.jpg
 __pycache__/
+cafe/renders/
+cafe/build/rife_cache/
+cafe/build/*.wav
+blender/renders/*.png
+!blender/renders/A_wide_establishing.png
+!blender/renders/B_lowangle_hero_word.png
+!blender/renders/C_closeup_dial.png
