@@ -18,3 +18,7 @@ teardown/renders/
 teardown/build/
 teardown/test_*.png
 teardown/output/teardown_nothing_headphone_vu_tv.mp4
+plugin_test/*.mp4
+plugin_test/parts/
+plugin_test/mix.wav
+plugin_test/stab.trf
