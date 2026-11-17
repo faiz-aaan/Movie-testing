@@ -13,3 +13,4 @@ blender/renders/*.png
 cafe/output/*.mp4
 !cafe/output/*_hf_video.mp4
 cafe/higgsfield/*.png
+client_footage/
