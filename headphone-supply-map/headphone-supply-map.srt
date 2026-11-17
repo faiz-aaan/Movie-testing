@@ -1,0 +1,23 @@
+1
+00:00:00,800 --> 00:00:04,181
+Headphones look simple. The map behind them is not.
+
+2
+00:00:04,600 --> 00:00:09,365
+Magnets like the ones in its drivers? More than 9 in 10 are made in China.
+
+3
+00:00:10,000 --> 00:00:15,007
+Lithium for the battery is mostly refined in China too: about 7 in 10.
+
+4
+00:00:15,600 --> 00:00:21,077
+And one Taiwan-based foundry takes about 7 in 10 of the world's contract chip sales.
+
+5
+00:00:22,000 --> 00:00:25,691
+It all converges on electronics clusters in southern China.
+
+6
+00:00:27,600 --> 00:00:30,123
+Then it ships to everyone who presses play.
