@@ -31,3 +31,8 @@ bask-cafe/refs/
 bask-cafe/clips/
 bask-cafe/build/
 bask-cafe/*.mp4
+films/*/assets/
+films/*/research/
+films/*/review/
+films/*/renders/
+films/*/logs/
