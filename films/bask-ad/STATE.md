@@ -30,3 +30,13 @@ Read this first in a new session, after loading the cinecode skill (Claude Code:
 ## Log
 | Date | What | File |
 |---|---|---|
+
+## Session notes (2026-11-18)
+- Mode: Quick · Purpose: Ad & product · 9:16 · ~25 s · music only + foley
+- Music: assets/music/openverse-311ba94a-...-little-tomcat-instrumental-version.bin (Josh Woodward, "Little Tomcat (Instrumental Version)", CC BY) (user)
+- Look: user's 5 café photos (/home/user/Movie-testing/bask-cafe/refs/c1-c5.jpg) kept real; code adds light passes, 3D in-space type, terracotta graphic shapes. No AI generation.
+- Palette: terracotta #C4623A · cream #FFF4E6 · espresso #3A2418 · leaf #4E7A3A · sun gold #F2B544
+- Beats: 0-2.5 crema swirl (push-in, match cut) · 2.5-6 brick atrium crane up, BASK on beat · 6-10 booths lateral dolly, SETTLE IN. · 10-14 hall tilt up, globes light, STAY A WHILE · 14-18 graphic beat, 3 hard cuts COFFEE / FOOD / FRIENDS · 18-22 garden atrium pull-out, YOUR TABLE IS WAITING · 22-25 end card, swirl forms logo, BASK BY COFFEE, Palavakkam, Open daily till 11 pm
+- Signature: terracotta swirl (open, graphic beat, logo)
+- Card: approved by the user (music pick). Note: the guard misdetects the user's language as Turkish; ask questions in plain English text.
+- Next action: build film.html (delete example scenes; scene 1 crema + scene 4 hall first), make.py stills, show the two-scene sheet.
